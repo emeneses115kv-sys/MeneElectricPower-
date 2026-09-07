@@ -1,0 +1,8 @@
+{
+  "name": "MeneElectricPower ⚡",
+  "description": "Diseño y cálculo de diagramas unifilares eléctricos con simulación de corriente en tiempo real, validación normativa de calibres y protecciones, asistente IA, reportes técnicos en PDF/A4 y funcionamiento offline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "CircuitData": {
+      "title": "Circuit Data",
+      "description": "User's current circuit design.",
+      "type": "object",
+      "properties": {
+        "nodes": { "type": "array" },
+        "edges": { "type": "array" },
+        "config": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["nodes", "edges", "config"]
+    },
+    "CustomComponent": {
+      "title": "Custom Component",
+      "description": "A user-designed electrical component shape.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 50 },
+        "paths": { "type": "array" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "paths", "width", "height", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/circuitData/{docId}": {
+      "schema": "#/entities/CircuitData",
+      "description": "Stores user circuit data."
+    },
+    "users/{userId}/custom_components/{componentId}": {
+      "schema": "#/entities/CustomComponent",
+      "description": "Stores custom drawn component definitions."
+    }
+  }
+}

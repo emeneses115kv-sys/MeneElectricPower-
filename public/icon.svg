@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="108" fill="#0f172a"/>
+  <rect x="24" y="24" width="464" height="464" rx="84" fill="none" stroke="#22d3ee" stroke-width="6" stroke-opacity="0.4"/>
+  <!-- Circuit tracks -->
+  <path d="M96 256 H180 L220 180 L292 332 L332 256 H416" fill="none" stroke="#38bdf8" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Central electrical lightning -->
+  <path d="M268 96 L188 268 H276 L244 416 L348 240 H260 Z" fill="#facc15" stroke="#ca8a04" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Small connection nodes -->
+  <circle cx="96" cy="256" r="14" fill="#38bdf8" stroke="#0f172a" stroke-width="4"/>
+  <circle cx="416" cy="256" r="14" fill="#38bdf8" stroke="#0f172a" stroke-width="4"/>
+  <circle cx="256" cy="96" r="8" fill="#facc15"/>
+</svg>

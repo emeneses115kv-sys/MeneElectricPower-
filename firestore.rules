@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // users/{userId}/circuitData/{docId}
+    match /users/{userId}/circuitData/{docId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // users/{userId}/custom_components/{componentId}
+    match /users/{userId}/custom_components/{componentId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      
+      allow create: if isSignedIn() 
+        && request.auth.uid == userId
+        && isValidId(componentId)
+        && request.resource.data.keys().hasAll(['id', 'name', 'category', 'paths', 'width', 'height', 'createdAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 100
+        && request.resource.data.category is string && request.resource.data.category.size() <= 50
+        && request.resource.data.paths is list && request.resource.data.paths.size() <= 100
+        && request.resource.data.width is number
+        && request.resource.data.height is number
+        && request.resource.data.createdAt == request.time;
+        
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && isValidId(componentId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'category', 'paths', 'width', 'height'])
+        && (request.resource.data.name is string ? request.resource.data.name.size() <= 100 : true)
+        && (request.resource.data.category is string ? request.resource.data.category.size() <= 50 : true)
+        && (request.resource.data.paths is list ? request.resource.data.paths.size() <= 100 : true)
+        && (request.resource.data.width is number ? true : true)
+        && (request.resource.data.height is number ? true : true);
+
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

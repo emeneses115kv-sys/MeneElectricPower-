@@ -1,0 +1,1 @@
+sed -i '/<MaterialComputationModal/i \      <CustomComponentDesignerModal\n        isOpen={isDesignerOpen}\n        onClose={() => setIsDesignerOpen(false)}\n        onComponentSaved={async () => {\n          const comps = await getCustomComponents();\n          setCustomComponents(comps);\n        }}\n      />\n' src/App.tsx

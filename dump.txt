@@ -1,0 +1,13 @@
+            const toNode = nodeMap.get(edge.toNodeId);
+            if (!fromNode || !toNode) return null;
+
+            return (
+              <EdgeFlowAnimation
+                key={edge.id}
+                edge={edge}
+                fromX={fromNode.x + 45}
+                fromY={fromNode.y + 35}
+                toX={toNode.x + 45}
+                toY={toNode.y + 35}
+              />
+            );
