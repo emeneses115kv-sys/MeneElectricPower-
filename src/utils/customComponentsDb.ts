@@ -1,29 +1,38 @@
-import { collection, doc, setDoc, getDocs, deleteDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { auth } from '../lib/firebase';
+import { supabaseRequest } from '../lib/supabase';
 import { CustomComponent } from '../types/electrical';
+
+interface CustomComponentRow {
+  component_id: string;
+  data: CustomComponent;
+}
 
 export async function saveCustomComponent(component: CustomComponent): Promise<void> {
   const user = auth.currentUser;
-  if (!user) throw new Error("Debe iniciar sesión para guardar componentes.");
-  
-  const componentRef = doc(db, 'users', user.uid, 'custom_components', component.id);
-  await setDoc(componentRef, component);
+  if (!user) throw new Error('Debe iniciar sesión para guardar componentes.');
+
+  await supabaseRequest<undefined>('custom_components?on_conflict=user_id,component_id', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: user.uid, component_id: component.id, data: component }),
+  });
 }
 
 export async function getCustomComponents(): Promise<CustomComponent[]> {
   const user = auth.currentUser;
   if (!user) return [];
-  
-  const componentsRef = collection(db, 'users', user.uid, 'custom_components');
-  const snapshot = await getDocs(componentsRef);
-  
-  return snapshot.docs.map(doc => doc.data() as CustomComponent);
+
+  const rows = await supabaseRequest<CustomComponentRow[]>(
+    `custom_components?user_id=eq.${encodeURIComponent(user.uid)}&select=component_id,data&order=component_id.asc`,
+  );
+  return rows.map(row => row.data);
 }
 
 export async function deleteCustomComponent(id: string): Promise<void> {
   const user = auth.currentUser;
-  if (!user) throw new Error("Debe iniciar sesión para eliminar componentes.");
-  
-  const componentRef = doc(db, 'users', user.uid, 'custom_components', id);
-  await deleteDoc(componentRef);
+  if (!user) throw new Error('Debe iniciar sesión para eliminar componentes.');
+
+  await supabaseRequest<undefined>(
+    `custom_components?user_id=eq.${encodeURIComponent(user.uid)}&component_id=eq.${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
 }

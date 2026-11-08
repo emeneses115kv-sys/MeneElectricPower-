@@ -12,12 +12,11 @@ import {
 import {
   loadSavedCircuit,
   saveCircuitToStorage,
-  syncCircuitToCloud,
-  loadCircuitFromCloud,
   INITIAL_CIRCUIT_NODES,
   INITIAL_CIRCUIT_EDGES,
   INITIAL_PROJECT_CONFIG,
 } from './utils/storage';
+import { syncCircuitToSupabase, loadCircuitFromSupabase } from './utils/supabaseStorage';
 import { validateCircuitRules } from './utils/electricalRulesValidator';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { signInWithGoogle, signOutUser, auth } from './lib/firebase';
@@ -56,19 +55,18 @@ export default function App() {
   const { undo, redo, canUndo, canRedo } = useUndoRedo(nodes, edges, setNodes, setEdges, 600);
 
   useEffect(() => {
-    if (!localStorage.getItem("hasClearedInitialDemo_v2")) {
+    if (!localStorage.getItem('hasClearedInitialDemo_v2')) {
       setNodes([]);
       setEdges([]);
-      localStorage.setItem("hasClearedInitialDemo_v2", "true");
+      localStorage.setItem('hasClearedInitialDemo_v2', 'true');
     }
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async currentUser => {
       setUser(currentUser);
       if (currentUser && !hasCloudLoaded) {
-        // Cargar desde la nube una vez que estemos autenticados
-        const cloudData = await loadCircuitFromCloud();
+        const cloudData = await loadCircuitFromSupabase();
         const customComps = await getCustomComponents();
         setCustomComponents(customComps);
 
@@ -96,104 +94,59 @@ export default function App() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isLayersOpen, setIsLayersOpen] = useState(true);
   const [isDesignerOpen, setIsDesignerOpen] = useState(false);
-  const [customComponents, setCustomComponents] = useState<any[]>([]);
+  const [customComponents, setCustomComponents] = useState<CustomComponent[]>([]);
   const [diagramView, setDiagramView] = useState<DiagramViewMode>('unifilar');
 
   // Validación de reglas eléctricas en tiempo real
-  const { alerts, updatedEdges } = useMemo(() => {
-    return validateCircuitRules(nodes, edges, config);
-  }, [nodes, edges, config]);
+  const { alerts, updatedEdges } = useMemo(() => validateCircuitRules(nodes, edges, config), [nodes, edges, config]);
 
   // Guardado persistente automático en cada modificación
   useEffect(() => {
     saveCircuitToStorage(nodes, updatedEdges, config);
     if (hasCloudLoaded) {
-      syncCircuitToCloud(nodes, updatedEdges, config);
+      void syncCircuitToSupabase(nodes, updatedEdges, config);
     }
   }, [nodes, updatedEdges, config, hasCloudLoaded]);
 
-  // Actualizar carga simulada (amperaje global que modula la velocidad del flujo)
   const handleUpdateSimulatedAmperage = useCallback((amps: number) => {
     setConfig(prev => ({ ...prev, simulatedAmperage: amps }));
-    setNodes(prev =>
-      prev.map(node => {
-        if (node.type === 'acometida_aerea' || node.type === 'acometida_subterranea' || node.type === 'interruptor_principal') {
-          return {
-            ...node,
-            properties: {
-              ...node.properties,
-              currentLoadAmps: amps,
-            },
-          };
-        }
-        return node;
-      })
-    );
+    setNodes(prev => prev.map(node => {
+      if (node.type === 'acometida_aerea' || node.type === 'acometida_subterranea' || node.type === 'interruptor_principal') {
+        return { ...node, properties: { ...node.properties, currentLoadAmps: amps } };
+      }
+      return node;
+    }));
   }, []);
 
-  // Actualizar propiedades técnicas de un nodo específico
-  const handleUpdateNodeProperties = useCallback(
-    (nodeId: string, updatedProps: Partial<ComponentProperties>) => {
-      setNodes(prev =>
-        prev.map(n => {
-          if (n.id === nodeId) {
-            return {
-              ...n,
-              properties: {
-                ...n.properties,
-                ...updatedProps,
-              },
-            };
-          }
-          return n;
-        })
-      );
-    },
-    []
-  );
+  const handleUpdateNodeProperties = useCallback((nodeId: string, updatedProps: Partial<ComponentProperties>) => {
+    setNodes(prev => prev.map(node => node.id === nodeId
+      ? { ...node, properties: { ...node.properties, ...updatedProps } }
+      : node));
+  }, []);
 
-  // Actualizar datos generales del nodo (label, etc)
   const handleUpdateNodeData = useCallback((nodeId: string, data: Partial<ElectricalNode>) => {
-    setNodes(prev =>
-      prev.map(n => {
-        if (n.id === nodeId) {
-          return { ...n, ...data };
-        }
-        return n;
-      })
-    );
+    setNodes(prev => prev.map(node => node.id === nodeId ? { ...node, ...data } : node));
   }, []);
 
-  // Mover nodo en el canvas CAD
   const handleMoveNode = useCallback((nodeId: string, x: number, y: number) => {
-    setNodes(prev =>
-      prev.map(n => (n.id === nodeId ? { ...n, x, y } : n))
-    );
+    setNodes(prev => prev.map(node => node.id === nodeId ? { ...node, x, y } : node));
   }, []);
 
-  // Eliminar nodo y sus conexiones
   const handleDeleteNode = useCallback((nodeId: string) => {
-    setNodes(prev => prev.filter(n => n.id !== nodeId));
-    setEdges(prev => prev.filter(e => e.fromNodeId !== nodeId && e.toNodeId !== nodeId));
+    setNodes(prev => prev.filter(node => node.id !== nodeId));
+    setEdges(prev => prev.filter(edge => edge.fromNodeId !== nodeId && edge.toNodeId !== nodeId));
     setSelectedNodeId(null);
   }, []);
 
-  // Aplicar corrección sugerida por el motor de normas o IA con 1 solo clic
-  const handleApplyFix = useCallback(
-    (nodeId: string, propertyKey: keyof ComponentProperties, newValue: any) => {
-      handleUpdateNodeProperties(nodeId, { [propertyKey]: newValue });
-    },
-    [handleUpdateNodeProperties]
-  );
+  const handleApplyFix = useCallback((nodeId: string, propertyKey: keyof ComponentProperties, newValue: any) => {
+    handleUpdateNodeProperties(nodeId, { [propertyKey]: newValue });
+  }, [handleUpdateNodeProperties]);
 
-  // Inserción de múltiples componentes seleccionados desde el catálogo
   const handleAddSymbolsFromCatalog = useCallback((catalogItems: SymbolCatalogItem[]) => {
     if (catalogItems.length === 0) return;
 
-    // Calcular posición óptima en el canvas para no solapar
-    const lastX = nodes.length > 0 ? Math.max(...nodes.map(n => n.x)) : 100;
+    const lastX = nodes.length > 0 ? Math.max(...nodes.map(node => node.x)) : 100;
     const baseY = 120;
-
     const newNodes: ElectricalNode[] = [];
     const newEdges: ElectricalEdge[] = [];
 
@@ -201,7 +154,6 @@ export default function App() {
       const newNodeId = `node-${item.type}-${Date.now()}-${index}`;
       const newX = lastX + 180 + (index % 3) * 160;
       const newY = baseY + Math.floor(index / 3) * 120;
-
       const newNode: ElectricalNode = {
         id: newNodeId,
         type: item.type,
@@ -225,11 +177,9 @@ export default function App() {
           tag: `${item.type.substring(0, 4).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
         },
       };
-
       newNodes.push(newNode);
 
-      // Conectar automáticamente a la barra colectora si existe
-      const busNode = nodes.find(n => n.type === 'barra_distribucion');
+      const busNode = nodes.find(node => node.type === 'barra_distribucion');
       if (busNode) {
         newEdges.push({
           id: `edge-${busNode.id}-${newNodeId}`,
@@ -248,7 +198,6 @@ export default function App() {
     setIsSymbolsOpen(false);
   }, [nodes]);
 
-  // Restablecer circuito al diseño maestro de 1200A y 4 medidores
   const handleResetToDemo = useCallback(() => {
     setNodes(INITIAL_CIRCUIT_NODES);
     setEdges(INITIAL_CIRCUIT_EDGES);
@@ -264,9 +213,7 @@ export default function App() {
 
   const handleSave = useCallback(() => {
     saveCircuitToStorage(nodes, updatedEdges, config);
-    if (hasCloudLoaded) {
-      syncCircuitToCloud(nodes, updatedEdges, config);
-    }
+    if (hasCloudLoaded) void syncCircuitToSupabase(nodes, updatedEdges, config);
   }, [nodes, updatedEdges, config, hasCloudLoaded]);
 
   const handleAutoArrange = useCallback(() => {
@@ -275,7 +222,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-[#0F1115] font-sans text-[#E0E0E0]">
-      {/* Barra superior de control e instalación */}
       <TopNavBar
         config={config}
         alerts={alerts}
@@ -312,17 +258,10 @@ export default function App() {
         canRedo={canRedo}
       />
 
-      {/* Modal para Exportar Imagen */}
       {isExportModalOpen && (
-        <ExportImageModal
-          isOpen={isExportModalOpen}
-          onClose={() => setIsExportModalOpen(false)}
-          currentView={diagramView}
-          onChangeView={setDiagramView}
-        />
+        <ExportImageModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} currentView={diagramView} onChangeView={setDiagramView} />
       )}
 
-      {/* Lienzo CAD interactivo con animaciones de bordes y alertas */}
       <main className="flex-1 relative w-full h-full" style={{ perspective: '1200px' }}>
         <ElectricalCanvas
           nodes={nodes}
@@ -341,61 +280,16 @@ export default function App() {
         />
       </main>
 
-      {/* Ventana de Catálogo de Simbología con Selección Múltiple y Minimizado */}
-      <SymbolCatalogModal
-        customComponents={customComponents}
-        isOpen={isSymbolsOpen}
-        onClose={() => setIsSymbolsOpen(false)}
-        onAddSymbols={handleAddSymbolsFromCatalog}
-      />
-
-      {/* Ventana de Reporte Técnico y Descarga de Planos A4 */}
-      <TechnicalReportModal
-        isOpen={isReportsOpen}
-        onClose={() => setIsReportsOpen(false)}
-        nodes={nodes}
-        edges={updatedEdges}
-        config={config}
-        alerts={alerts}
-      />
-
-      {/* Ventana de Cómputo de Materiales */}
+      <SymbolCatalogModal customComponents={customComponents} isOpen={isSymbolsOpen} onClose={() => setIsSymbolsOpen(false)} onAddSymbols={handleAddSymbolsFromCatalog} />
+      <TechnicalReportModal isOpen={isReportsOpen} onClose={() => setIsReportsOpen(false)} nodes={nodes} edges={updatedEdges} config={config} alerts={alerts} />
       <CustomComponentDesignerModal
         isOpen={isDesignerOpen}
         onClose={() => setIsDesignerOpen(false)}
-        onComponentSaved={async () => {
-          const comps = await getCustomComponents();
-          setCustomComponents(comps);
-        }}
+        onComponentSaved={async () => setCustomComponents(await getCustomComponents())}
       />
-
-      <MaterialComputationModal
-        isOpen={isMaterialsOpen}
-        onClose={() => setIsMaterialsOpen(false)}
-        nodes={nodes}
-        edges={updatedEdges}
-      />
-
-      {/* Ventana del Asistente Ingeniero Eléctrico IA con Modo Offline */}
-      <ElectricalAIAssistant
-        isOpen={isAIOpen}
-        onClose={() => setIsAIOpen(false)}
-        nodes={nodes}
-        edges={updatedEdges}
-        config={config}
-        alerts={alerts}
-        onApplyFix={handleApplyFix}
-        isOnline={isOnline}
-      />
-      
-      {/* Ventana de Sugerencias de Modificación de Estructura por IA */}
-      <AIStructureModifierModal 
-        isOpen={isAIModifierOpen}
-        onClose={() => setIsAIModifierOpen(false)}
-        onOpenAI={() => setIsAIOpen(true)}
-        nodes={nodes}
-      />
-
+      <MaterialComputationModal isOpen={isMaterialsOpen} onClose={() => setIsMaterialsOpen(false)} nodes={nodes} edges={updatedEdges} />
+      <ElectricalAIAssistant isOpen={isAIOpen} onClose={() => setIsAIOpen(false)} nodes={nodes} edges={updatedEdges} config={config} alerts={alerts} onApplyFix={handleApplyFix} isOnline={isOnline} />
+      <AIStructureModifierModal isOpen={isAIModifierOpen} onClose={() => setIsAIModifierOpen(false)} onOpenAI={() => setIsAIOpen(true)} nodes={nodes} />
       <AutoRecoveryToasts logs={recoveryLogs} onDismiss={dismissLog} />
     </div>
   );
