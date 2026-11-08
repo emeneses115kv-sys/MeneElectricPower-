@@ -1,6 +1,6 @@
 # Supabase + Firebase Auth setup for MeneElectricPower
 
-This app keeps Firebase Authentication (Google sign-in) and replaces Firestore cloud storage with Supabase Postgres. Local browser storage remains available offline.
+This app retains Firebase Authentication (Google sign-in) and uses Supabase Postgres for cloud persistence of circuits and custom components. Browser local storage remains the offline copy. Firestore is no longer used by the app's active cloud-storage paths; existing Firestore records are left untouched.
 
 ## Required configuration
 
@@ -13,11 +13,11 @@ The URL is also the development fallback. The key must be provided through the s
 
 ## One-time Supabase dashboard setup
 
-1. In Supabase, enable Firebase as a Third-Party Auth provider and configure it for the Firebase project used by this application (`aqueous-mode-d6pck`). Follow Supabase's Firebase integration instructions. This lets PostgREST verify Firebase ID tokens used by the app and makes the token subject available to RLS.
-2. Apply `supabase/migrations/20261108000100_circuits_and_custom_components.sql` to the shared Supabase project using the Supabase SQL editor or the authorized Supabase CLI. Review the SQL before applying it.
+1. In Supabase, enable Firebase as a Third-Party Auth provider and configure it for the Firebase project used by this application (`aqueous-mode-d6pck`). Follow Supabase's Firebase integration instructions so Firebase ID tokens are verified and the token subject is available to Row Level Security.
+2. Review and apply `supabase/migrations/20261108000100_circuits_and_custom_components.sql` to the shared Supabase project using the Supabase SQL editor or an authorized Supabase CLI session. This creates the app's two tables and owner-only RLS policies. Do not disable RLS.
 3. Keep Firebase Google sign-in enabled. The Firebase UID (`sub` in the verified Firebase token) is used as the owner key in Supabase policies.
 
-Without the Firebase third-party auth integration and migration, cloud requests will fail closed; offline local storage still works. Do not disable RLS or put service-role keys in browser code.
+Without the Firebase third-party auth integration, anon/publishable key, and migration, cloud requests will fail; local storage remains available offline. Do not put service-role keys in browser code.
 
 ## Data migration note
 
